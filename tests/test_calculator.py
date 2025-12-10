@@ -41,6 +41,5 @@ class TestCalculator(unittest.TestCase):
         with self.assertRaises(ValueError):
             Calculator.factorial(-1)
 
-# Это нужно для запуска тестов через pytest
 if __name__ == '__main__':
     unittest.main()

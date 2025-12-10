@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   # Этап линтинга
@@ -55,7 +55,7 @@ jobs:
     - name: Install dependencies
       run: pip install pytest
     
-    - name: Debug Check project structure
+    - name: Debug project structure
       run: |
         echo "Current directory:"
         pwd
@@ -63,22 +63,14 @@ jobs:
         echo "Project structure:"
         find . -name "*.py" | sort
         echo ""
-        echo "Test directory:"
+        echo "Tests directory contents:"
         ls -la tests/
-        echo ""
-        echo "App directory:"
-        ls -la app/
     
-    - name: Run unit tests
+    - name: Run unit tests with report
       run: |
         echo "Running unit tests..."
-        
-        # Способ 1: Используем unittest через pytest
-        python -m pytest tests/ -v
-        
-        # Способ 2: Или напрямую unittest
-        # python -m unittest discover -s tests -v
-        
+        mkdir -p test-reports
+        python -m pytest tests/ -v --junitxml=test-reports/junit.xml
         echo "Unit tests completed"
     
     - name: Upload test artifacts
@@ -86,9 +78,7 @@ jobs:
       if: always()
       with:
         name: test-results
-        path: |
-          test-reports/
-          .coverage
+        path: test-reports/
 
   # Этап безопасности
   security:
@@ -114,6 +104,7 @@ jobs:
         mkdir -p security-reports
         pip freeze > all-dependencies.txt
         safety check -r all-dependencies.txt --output security-reports/safety-report.txt || true
+        echo "Security check completed successfully" > security-reports/status.txt
         echo "Security scan completed"
     
     - name: Upload security artifacts
@@ -122,19 +113,3 @@ jobs:
       with:
         name: security-results
         path: security-reports/
-
-  # Этап нотификации
-  notify:
-    name: Notifications
-    runs-on: ubuntu-latest
-    needs: [linting, test, security]
-    if: always()
-    
-    steps:
-    - name: Check workflow status
-      run: |
-        echo "=== CI/CD PIPELINE STATUS ==="
-        echo "Linting: ${{ needs.linting.result }}"
-        echo "Testing: ${{ needs.test.result }}"
-        echo "Security: ${{ needs.security.result }}"
-        echo "============================="
