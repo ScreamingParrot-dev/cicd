@@ -1,42 +1,46 @@
+"""
+Unit tests for Calculator class
+"""
 import unittest
-import sys
-import os
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from app.calculator import Calculator
 
 class TestCalculator(unittest.TestCase):
     
     def test_add(self):
-        """Тест сложения"""
+        """Test addition method"""
         self.assertEqual(Calculator.add(2, 3), 5)
         self.assertEqual(Calculator.add(-1, 1), 0)
+        self.assertEqual(Calculator.add(0, 0), 0)
     
     def test_subtract(self):
-        """Тест вычитания"""
+        """Test subtraction method"""
         self.assertEqual(Calculator.subtract(10, 4), 6)
+        self.assertEqual(Calculator.subtract(5, 5), 0)
     
     def test_multiply(self):
-        """Тест умножения"""
+        """Test multiplication method"""
         self.assertEqual(Calculator.multiply(3, 4), 12)
+        self.assertEqual(Calculator.multiply(0, 5), 0)
     
     def test_divide(self):
-        """Тест деления"""
+        """Test division method"""
         self.assertEqual(Calculator.divide(10, 2), 5)
+        self.assertEqual(Calculator.divide(5, 2), 2.5)
         
-        # Тест деления на ноль
+        # Test division by zero
         with self.assertRaises(ValueError):
             Calculator.divide(5, 0)
     
     def test_factorial(self):
-        """Тест факториала"""
+        """Test factorial method"""
         self.assertEqual(Calculator.factorial(0), 1)
+        self.assertEqual(Calculator.factorial(1), 1)
         self.assertEqual(Calculator.factorial(5), 120)
         
-        # Тест отрицательного числа
+        # Test negative number
         with self.assertRaises(ValueError):
             Calculator.factorial(-1)
 
+# Это нужно для запуска тестов через pytest
 if __name__ == '__main__':
     unittest.main()

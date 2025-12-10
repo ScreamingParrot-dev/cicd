@@ -1,8 +1,5 @@
 name: CI/CD Pipeline
 
-env:
-  PYTHON_VERSION: '3.9'
-
 on:
   push:
     branches: [ main, develop ]
@@ -10,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  # Этап линтинга (linting) - выполняется ПАРАЛЛЕЛЬНО с тестами
+  # Этап линтинга
   linting:
     name: Code Linting
     runs-on: ubuntu-latest
@@ -19,31 +16,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
+        python-version: '3.9'
     
     - name: Install Pylint
       run: pip install pylint
-    
-    - name: Create pylint configuration
-      run: |
-        echo "[MASTER]
-        ignore=tests
-        disable=missing-docstring
-        
-        [FORMAT]
-        max-line-length=120
-        
-        [MESSAGES CONTROL]
-        max-line-length=120" > .pylintrc
     
     - name: Run Pylint analysis
       run: |
         echo "Running Pylint code analysis..."
         mkdir -p reports
-        pylint app/ --rcfile=.pylintrc --exit-zero > reports/pylint-report.txt
+        pylint app/ --exit-zero > reports/pylint-report.txt
         echo "Pylint analysis completed"
     
     - name: Upload linting artifacts
@@ -52,9 +37,8 @@ jobs:
       with:
         name: linting-results
         path: reports/
-        retention-days: 7
 
-  # Этап тестирования (test) - выполняется ПАРАЛЛЕЛЬНО с линтингом
+  # Этап тестирования
   test:
     name: Unit Testing
     runs-on: ubuntu-latest
@@ -63,20 +47,38 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
+        python-version: '3.9'
     
     - name: Install dependencies
+      run: pip install pytest
+    
+    - name: Debug: Check project structure
       run: |
-        pip install -r requirements.txt
+        echo "Current directory:"
+        pwd
+        echo ""
+        echo "Project structure:"
+        find . -name "*.py" | sort
+        echo ""
+        echo "Test directory:"
+        ls -la tests/
+        echo ""
+        echo "App directory:"
+        ls -la app/
     
     - name: Run unit tests
       run: |
         echo "Running unit tests..."
-        mkdir -p test-reports
-        python -m pytest tests/ -v --junitxml=test-reports/junit.xml
+        
+        # Способ 1: Используем unittest через pytest
+        python -m pytest tests/ -v
+        
+        # Способ 2: Или напрямую unittest
+        # python -m unittest discover -s tests -v
+        
         echo "Unit tests completed"
     
     - name: Upload test artifacts
@@ -84,23 +86,24 @@ jobs:
       if: always()
       with:
         name: test-results
-        path: test-reports/
-        retention-days: 7
+        path: |
+          test-reports/
+          .coverage
 
-  # Этап проверки безопасности (security)
+  # Этап безопасности
   security:
     name: Security Check
     runs-on: ubuntu-latest
-    needs: [linting, test]  # Зависит от успешного выполнения linting и test
+    needs: [linting, test]
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
       
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
+        python-version: '3.9'
     
     - name: Install Safety
       run: pip install safety
@@ -109,13 +112,8 @@ jobs:
       run: |
         echo "Running security scan..."
         mkdir -p security-reports
-        
-        # Создаем файл со всеми зависимостями
         pip freeze > all-dependencies.txt
-        
-        # Проверяем зависимости на уязвимости
         safety check -r all-dependencies.txt --output security-reports/safety-report.txt || true
-        
         echo "Security scan completed"
     
     - name: Upload security artifacts
@@ -124,9 +122,8 @@ jobs:
       with:
         name: security-results
         path: security-reports/
-        retention-days: 7
 
-  # Этап уведомлений (опционально)
+  # Этап нотификации
   notify:
     name: Notifications
     runs-on: ubuntu-latest
@@ -136,16 +133,8 @@ jobs:
     steps:
     - name: Check workflow status
       run: |
-        echo "=== WORKFLOW STATUS ==="
-        echo "Linting job status: ${{ needs.linting.result }}"
-        echo "Testing job status: ${{ needs.test.result }}"
-        echo "Security job status: ${{ needs.security.result }}"
-        
-        # Простая проверка статуса
-        if [ "${{ needs.linting.result }}" = "success" ] && [ "${{ needs.test.result }}" = "success" ] && [ "${{ needs.security.result }}" = "success" ]; then
-          echo "All jobs completed successfully!"
-          exit 0
-        else
-          echo "Some jobs failed!"
-          exit 1
-        fi
+        echo "=== CI/CD PIPELINE STATUS ==="
+        echo "Linting: ${{ needs.linting.result }}"
+        echo "Testing: ${{ needs.test.result }}"
+        echo "Security: ${{ needs.security.result }}"
+        echo "============================="
