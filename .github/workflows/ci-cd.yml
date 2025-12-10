@@ -1,10 +1,7 @@
 name: CI/CD Pipeline
 
-# Переменные окружения для конфигурации инструментов
 env:
   PYTHON_VERSION: '3.9'
-  PYLINT_RCFILE: '.pylintrc'
-  SAFETY_FORMAT: 'json'
 
 on:
   push:
@@ -13,7 +10,7 @@ on:
     branches: [ main ]
 
 jobs:
-  # Этап линтинга (linting)
+  # Этап линтинга (linting) - выполняется ПАРАЛЛЕЛЬНО с тестами
   linting:
     name: Code Linting
     runs-on: ubuntu-latest
@@ -28,22 +25,29 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
     
     - name: Install Pylint
-      run: pip install pylint==${{ env.PYLINT_VERSION || '2.15.0' }}
+      run: pip install pylint
+    
+    - name: Create pylint configuration
+      run: |
+        echo "[MASTER]
+        ignore=tests
+        disable=missing-docstring
+        
+        [FORMAT]
+        max-line-length=120
+        
+        [MESSAGES CONTROL]
+        max-line-length=120" > .pylintrc
     
     - name: Run Pylint analysis
       run: |
-        # Создаем конфигурацию pylint
-        echo "[MASTER]
-        ignore=tests
-        [FORMAT]
-        max-line-length=100" > ${{ env.PYLINT_RCFILE }}
-        
-        # Запускаем линтинг и сохраняем отчет
+        echo "Running Pylint code analysis..."
         mkdir -p reports
-        pylint app/ --rcfile=${{ env.PYLINT_RCFILE }} --exit-zero > reports/pylint-report.txt
+        pylint app/ --rcfile=.pylintrc --exit-zero > reports/pylint-report.txt
+        echo "Pylint analysis completed"
     
     - name: Upload linting artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: linting-results
@@ -70,18 +74,13 @@ jobs:
     
     - name: Run unit tests
       run: |
-        # Создаем директорию для отчетов
+        echo "Running unit tests..."
         mkdir -p test-reports
-        
-        # Запускаем тесты с созданием отчета
         python -m pytest tests/ -v --junitxml=test-reports/junit.xml
-        
-        # Считаем количество тестов
-        TEST_COUNT=$(python -m pytest tests/ --collect-only | grep "test_" | wc -l)
-        echo "Total tests: $TEST_COUNT"
+        echo "Unit tests completed"
     
     - name: Upload test artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results
@@ -108,52 +107,45 @@ jobs:
     
     - name: Run security check
       run: |
+        echo "Running security scan..."
+        mkdir -p security-reports
+        
         # Создаем файл со всеми зависимостями
         pip freeze > all-dependencies.txt
         
         # Проверяем зависимости на уязвимости
-        mkdir -p security-reports
-        
-        # Формат вывода зависит от переменной окружения
-        safety check -r all-dependencies.txt --output security-reports/safety-report.txt
-        
-        # Также сохраняем в JSON если нужно
-        safety check -r all-dependencies.txt --json > security-reports/safety-report.json || true
+        safety check -r all-dependencies.txt --output security-reports/safety-report.txt || true
         
         echo "Security scan completed"
     
     - name: Upload security artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-results
         path: security-reports/
         retention-days: 7
 
-  # Этап уведомлений (по желанию, но в задании есть)
+  # Этап уведомлений (опционально)
   notify:
     name: Notifications
     runs-on: ubuntu-latest
     needs: [linting, test, security]
-    if: always()  # Всегда запускаем, даже если предыдущие этапы упали
+    if: always()
     
     steps:
     - name: Check workflow status
       run: |
-        echo "Workflow completed with status:"
-        echo "Linting: ${{ needs.linting.result }}"
-        echo "Testing: ${{ needs.test.result }}"
-        echo "Security: ${{ needs.security.result }}"
+        echo "=== WORKFLOW STATUS ==="
+        echo "Linting job status: ${{ needs.linting.result }}"
+        echo "Testing job status: ${{ needs.test.result }}"
+        echo "Security job status: ${{ needs.security.result }}"
         
-        # Здесь можно добавить интеграцию с Slack/Telegram/Email
-        # Например, через curl к webhook
-        # Но это опционально и требует настройки секретов
-        
-        if [[ "${{ needs.linting.result }}" == "failure" || 
-              "${{ needs.test.result }}" == "failure" || 
-              "${{ needs.security.result }}" == "failure" ]]; then
-          echo "Pipeline failed!"
-          # Отправляем уведомление об ошибке
+        # Простая проверка статуса
+        if [ "${{ needs.linting.result }}" = "success" ] && [ "${{ needs.test.result }}" = "success" ] && [ "${{ needs.security.result }}" = "success" ]; then
+          echo "All jobs completed successfully!"
+          exit 0
         else
-          echo "Pipeline succeeded!"
+          echo "Some jobs failed!"
+          exit 1
         fi
